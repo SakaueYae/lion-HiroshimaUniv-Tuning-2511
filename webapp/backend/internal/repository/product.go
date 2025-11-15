@@ -30,9 +30,11 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 	// 検索条件の追加
 	whereClause := ""
 	if req.Search != "" {
-		whereClause = " WHERE (name LIKE ? OR description LIKE ?)"
-		searchPattern := "%" + req.Search + "%"
-		args = append(args, searchPattern, searchPattern)
+		// フレーズ検索（ダブルクォートで囲む）によりLIKE検索と同等の結果を得る
+		whereClause = " WHERE MATCH(name, description) AGAINST(? IN BOOLEAN MODE)"
+		// ダブルクォートで囲んでフレーズ検索にする
+		phraseSearch := `"` + req.Search + `"`
+		args = append(args, phraseSearch)
 	}
 
 	// 総件数の取得
