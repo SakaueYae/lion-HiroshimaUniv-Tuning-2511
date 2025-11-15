@@ -15,3 +15,6 @@ ALTER TABLE products ADD INDEX idx_weight_desc (weight DESC, product_id ASC);
 -- WHERE shipped_status = 'shipping' AND JOIN ON product_id の両方をカバー
 ALTER TABLE orders ADD INDEX idx_orders_status_product (shipped_status, product_id);
 ALTER TABLE products ADD FULLTEXT INDEX idx_fulltext_name_description (name, description);
+
+-- FULLTEXT検索の最適化: 既存のインデックスを削除して、ngram_token_size=2で再作成
+ALTER TABLE products ADD FULLTEXT INDEX idx_fulltext_name_description (name, description) WITH PARSER ngram;
