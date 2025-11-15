@@ -56,7 +56,7 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
             p.weight,
             p.value
         FROM orders o
-        JOIN products p ON o.product_id = p.product_id
+        STRAIGHT_JOIN products p ON o.product_id = p.product_id
         WHERE o.shipped_status = 'shipping'
     `
 	err := r.db.SelectContext(ctx, &orders, query)
