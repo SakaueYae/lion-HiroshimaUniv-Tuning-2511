@@ -59,54 +59,86 @@ func (s *RobotService) UpdateOrderStatus(ctx context.Context, orderID int64, new
 
 func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID string, robotCapacity int) (model.DeliveryPlan, error) {
 	n := len(orders)
-	bestValue := 0
-	var bestSet []model.Order
-	steps := 0
-	checkEvery := 16384
 
-	var dfs func(i, curWeight, curValue int, curSet []model.Order) bool
-	dfs = func(i, curWeight, curValue int, curSet []model.Order) bool {
-		if curWeight > robotCapacity {
-			return false
-		}
-		steps++
-		if checkEvery > 0 && steps%checkEvery == 0 {
+	// エッジケースの処理
+	if n == 0 || robotCapacity <= 0 {
+		return model.DeliveryPlan{
+			RobotID:     robotID,
+			TotalWeight: 0,
+			TotalValue:  0,
+			Orders:      []model.Order{},
+		}, nil
+	}
+
+	// 動的計画法テーブルの初期化
+	// dp[i][w] = 最初のi個の注文を考慮して、重量w以下での最大価値
+	dp := make([][]int, n+1)
+	for i := range dp {
+		dp[i] = make([]int, robotCapacity+1)
+	}
+
+	checkEvery := 100 // コンテキストチェックの間隔
+
+	// 各注文について動的計画法を実行
+	for i := 1; i <= n; i++ {
+		// 定期的にコンテキストキャンセルをチェック（最初の反復も含む）
+		if i == 1 || i%checkEvery == 0 {
 			select {
 			case <-ctx.Done():
-				return true
+				return model.DeliveryPlan{}, ctx.Err()
 			default:
 			}
 		}
-		if i == n {
-			if curValue > bestValue {
-				bestValue = curValue
-				bestSet = append([]model.Order{}, curSet...)
+
+		order := orders[i-1]
+		weight := order.Weight
+		value := order.Value
+
+		for w := 0; w <= robotCapacity; w++ {
+			// この注文を含めない場合
+			dp[i][w] = dp[i-1][w]
+
+			// この注文を含める場合（重量が許す限り）
+			if w >= weight {
+				includeValue := dp[i-1][w-weight] + value
+				if includeValue > dp[i][w] {
+					dp[i][w] = includeValue
+				}
 			}
-			return false
 		}
-
-		if dfs(i+1, curWeight, curValue, curSet) {
-			return true
-		}
-
-		order := orders[i]
-		return dfs(i+1, curWeight+order.Weight, curValue+order.Value, append(curSet, order))
 	}
 
-	canceled := dfs(0, 0, 0, nil)
-	if canceled {
-		return model.DeliveryPlan{}, ctx.Err()
+	// 最大価値を取得
+	maxValue := dp[n][robotCapacity]
+
+	// 選択された注文を復元
+	var selectedOrders []model.Order
+	currentWeight := robotCapacity
+
+	for i := n; i > 0 && currentWeight > 0; i-- {
+		// dp[i][currentWeight] != dp[i-1][currentWeight] なら、注文i-1を選択している
+		if dp[i][currentWeight] != dp[i-1][currentWeight] {
+			order := orders[i-1]
+			selectedOrders = append(selectedOrders, order)
+			currentWeight -= order.Weight
+		}
 	}
 
+	// 復元は逆順なので、元の順序に戻す
+	for i, j := 0, len(selectedOrders)-1; i < j; i, j = i+1, j-1 {
+		selectedOrders[i], selectedOrders[j] = selectedOrders[j], selectedOrders[i]
+	}
+
+	// 実際の総重量を計算
 	var totalWeight int
-	for _, o := range bestSet {
+	for _, o := range selectedOrders {
 		totalWeight += o.Weight
 	}
 
 	return model.DeliveryPlan{
 		RobotID:     robotID,
 		TotalWeight: totalWeight,
-		TotalValue:  bestValue,
-		Orders:      bestSet,
+		TotalValue:  maxValue,
+		Orders:      selectedOrders,
 	}, nil
 }
