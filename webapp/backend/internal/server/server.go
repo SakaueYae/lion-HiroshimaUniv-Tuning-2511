@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
@@ -100,8 +101,23 @@ func (s *Server) Run() {
 		appPort = "8080"
 	}
 
+	// HTTPサーバーの詳細設定
+	srv := &http.Server{
+		Addr:    ":" + appPort,
+		Handler: s.Router,
+
+		// タイムアウト設定
+		ReadTimeout:       10 * time.Second,  // リクエスト読み取り
+		WriteTimeout:      30 * time.Second,  // レスポンス書き込み（画像配信を考慮）
+		IdleTimeout:       120 * time.Second, // キープアライブ
+		ReadHeaderTimeout: 5 * time.Second,   // ヘッダ読み取り
+
+		// その他の設定
+		MaxHeaderBytes: 1 << 20, // 1MB
+	}
+
 	log.Printf("Starting server on :%s", appPort)
-	if err := http.ListenAndServe(":"+appPort, s.Router); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
