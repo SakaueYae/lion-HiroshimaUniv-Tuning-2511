@@ -16,3 +16,8 @@ ALTER TABLE products ADD INDEX idx_weight_desc (weight DESC, product_id ASC);
 ALTER TABLE orders ADD INDEX idx_orders_status_product (shipped_status, product_id);
 ALTER TABLE products ADD FULLTEXT INDEX idx_fulltext_name_description (name, description) WITH PARSER ngram;
 
+ALTER TABLE users ADD INDEX idx_user_name (user_name);
+-- すでにuser_idのインデックスがあるため、重複を避ける
+-- ALTER TABLE orders ADD INDEX idx_user_id (user_id);
+ALTER TABLE orders ADD INDEX idx_created_at (user_id, created_at);
+ALTER TABLE user_sessions ADD INDEX idx_expires_at (session_uuid, expires_at);
