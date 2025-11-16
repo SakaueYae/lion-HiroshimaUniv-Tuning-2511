@@ -70,6 +70,6 @@ func (s *AuthService) Login(ctx context.Context, userName, password string) (str
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	log.Printf("Login successful for UserName '%s', session created.", userName)
+	// log.Printf("Login successful for UserName '%s', session created.", userName)
 	return sessionID, expiresAt, nil
 }
