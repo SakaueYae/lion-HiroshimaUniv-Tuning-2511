@@ -70,11 +70,15 @@ func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID 
 		}, nil
 	}
 
-	// 動的計画法テーブルの初期化
-	// dp[i][w] = 最初のi個の注文を考慮して、重量w以下での最大価値
-	dp := make([][]int, n+1)
-	for i := range dp {
-		dp[i] = make([]int, robotCapacity+1)
+	// メモリ最適化: 2行のみを使用（前の行と現在の行）
+	// 空間計算量: O(n × capacity) → O(2 × capacity)
+	prev := make([]int, robotCapacity+1)
+	curr := make([]int, robotCapacity+1)
+
+	// 選択された注文を追跡するための配列（復元用）
+	selected := make([][]bool, n+1)
+	for i := range selected {
+		selected[i] = make([]bool, robotCapacity+1)
 	}
 
 	checkEvery := 100 // コンテキストチェックの間隔
@@ -96,28 +100,31 @@ func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID 
 
 		for w := 0; w <= robotCapacity; w++ {
 			// この注文を含めない場合
-			dp[i][w] = dp[i-1][w]
+			curr[w] = prev[w]
 
 			// この注文を含める場合（重量が許す限り）
 			if w >= weight {
-				includeValue := dp[i-1][w-weight] + value
-				if includeValue > dp[i][w] {
-					dp[i][w] = includeValue
+				includeValue := prev[w-weight] + value
+				if includeValue > curr[w] {
+					curr[w] = includeValue
+					selected[i][w] = true
 				}
 			}
 		}
+
+		// 行を交換（prevとcurrのポインタをスワップ）
+		prev, curr = curr, prev
 	}
 
 	// 最大価値を取得
-	maxValue := dp[n][robotCapacity]
+	maxValue := prev[robotCapacity]
 
 	// 選択された注文を復元
 	var selectedOrders []model.Order
 	currentWeight := robotCapacity
 
 	for i := n; i > 0 && currentWeight > 0; i-- {
-		// dp[i][currentWeight] != dp[i-1][currentWeight] なら、注文i-1を選択している
-		if dp[i][currentWeight] != dp[i-1][currentWeight] {
+		if selected[i][currentWeight] {
 			order := orders[i-1]
 			selectedOrders = append(selectedOrders, order)
 			currentWeight -= order.Weight
