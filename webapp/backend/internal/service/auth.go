@@ -33,6 +33,15 @@ func (s *AuthService) Login(ctx context.Context, userName, password string) (str
 	ctx, span := otel.Tracer("service.auth").Start(ctx, "AuthService.Login")
 	defer span.End()
 
+	// パスワードをバイト配列に変換し、使用後はメモリから確実に消去
+	passwordBytes := []byte(password)
+	defer func() {
+		// メモリ上のパスワードをゼロクリア（セキュリティ対策）
+		for i := range passwordBytes {
+			passwordBytes[i] = 0
+		}
+	}()
+
 	var sessionID string
 	var expiresAt time.Time
 	err := utils.WithTimeout(ctx, func(ctx context.Context) error {
@@ -49,7 +58,7 @@ func (s *AuthService) Login(ctx context.Context, userName, password string) (str
 		_, pwSpan := otel.Tracer("service.auth").Start(ctx, "password.verify")
 		// SHA256でパスワードをハッシュ化して比較
 		hasher := sha256.New()
-		hasher.Write([]byte(password))
+		hasher.Write(passwordBytes)
 		hashedPassword := hex.EncodeToString(hasher.Sum(nil))
 		pwSpan.End()
 
