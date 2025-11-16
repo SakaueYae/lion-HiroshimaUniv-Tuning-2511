@@ -42,7 +42,7 @@ func NewServer() (*Server, *sqlx.DB, error) {
 
 	robotAPIKey := os.Getenv("ROBOT_API_KEY")
 	if robotAPIKey == "" {
-		log.Println("Warning: ROBOT_API_KEY is not set. Using default key 'test-robot-key'")
+		// log.Println("Warning: ROBOT_API_KEY is not set. Using default key 'test-robot-key'")
 		robotAPIKey = "test-robot-key"
 	}
 	robotAuthMW := middleware.RobotAuthMiddleware(robotAPIKey)
@@ -116,7 +116,7 @@ func (s *Server) Run() {
 		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
-	log.Printf("Starting server on :%s", appPort)
+	// log.Printf("Starting server on :%s", appPort)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

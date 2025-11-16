@@ -5,7 +5,6 @@ import (
 	"backend/internal/repository"
 	"backend/internal/service/utils"
 	"context"
-	"log"
 )
 
 type RobotService struct {
@@ -40,7 +39,7 @@ func (s *RobotService) GenerateDeliveryPlan(ctx context.Context, robotID string,
 				if err := txStore.OrderRepo.UpdateStatuses(ctx, orderIDs, "delivering"); err != nil {
 					return err
 				}
-				log.Printf("Updated status to 'delivering' for %d orders", len(orderIDs))
+				// log.Printf("Updated status to 'delivering' for %d orders", len(orderIDs))
 			}
 			return nil
 		})

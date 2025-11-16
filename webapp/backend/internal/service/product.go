@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"log"
 
 	"backend/internal/model"
 	"backend/internal/repository"
@@ -54,7 +53,7 @@ func (s *ProductService) CreateOrders(ctx context.Context, userID int, items []m
 		return nil, err
 	}
 
-	log.Printf("Created %d orders for user %d", len(insertedOrderIDs), userID)
+	// log.Printf("Created %d orders for user %d", len(insertedOrderIDs), userID)
 	return insertedOrderIDs, nil
 }
 
