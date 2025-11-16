@@ -76,31 +76,42 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 
 	// WHERE句の構築
 	whereClause := "WHERE o.user_id = ?"
-	args := []interface{}{userID}
+
+	// 検索条件用のWHERE句（JOINが必要な場合）
+	searchWhereClause := whereClause
+	searchArgs := []interface{}{userID}
 
 	// 検索条件の追加
 	if req.Search != "" {
 		if req.Type == "prefix" {
-			whereClause += " AND p.name LIKE ?"
-			args = append(args, req.Search+"%")
+			searchWhereClause += " AND p.name LIKE ?"
+			searchArgs = append(searchArgs, req.Search+"%")
 		} else {
 			// partial (部分一致)
-			whereClause += " AND p.name LIKE ?"
-			args = append(args, "%"+req.Search+"%")
+			searchWhereClause += " AND p.name LIKE ?"
+			searchArgs = append(searchArgs, "%"+req.Search+"%")
 		}
 	}
 
-	// 総件数を取得
-	countQuery := fmt.Sprintf(`
-		SELECT COUNT(*)
-		FROM orders o
-		JOIN products p ON o.product_id = p.product_id
-		%s
-	`, whereClause)
-
+	// 総件数を取得（検索なしの場合はJOIN不要で高速化）
 	var total int
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
-		return nil, 0, err
+	if req.Search == "" {
+		// 検索なし: ordersテーブルのみでCOUNT（高速）
+		countQuery := "SELECT COUNT(*) FROM orders o WHERE o.user_id = ?"
+		if err := r.db.GetContext(ctx, &total, countQuery, userID); err != nil {
+			return nil, 0, err
+		}
+	} else {
+		// 検索あり: JOINが必要
+		countQuery := fmt.Sprintf(`
+			SELECT COUNT(*)
+			FROM orders o
+			JOIN products p ON o.product_id = p.product_id
+			%s
+		`, searchWhereClause)
+		if err := r.db.GetContext(ctx, &total, countQuery, searchArgs...); err != nil {
+			return nil, 0, err
+		}
 	}
 
 	// ソートフィールドのマッピング（カラム名への変換）
@@ -135,9 +146,9 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 		%s
 		ORDER BY %s %s, o.order_id ASC
 		LIMIT ? OFFSET ?
-	`, whereClause, sortColumn, sortOrder)
+	`, searchWhereClause, sortColumn, sortOrder)
 
-	queryArgs := append(args, req.PageSize, req.Offset)
+	queryArgs := append(searchArgs, req.PageSize, req.Offset)
 
 	var ordersRaw []orderRow
 	if err := r.db.SelectContext(ctx, &ordersRaw, dataQuery, queryArgs...); err != nil {
