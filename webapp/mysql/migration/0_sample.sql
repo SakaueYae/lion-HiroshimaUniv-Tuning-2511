@@ -21,3 +21,11 @@ ALTER TABLE users ADD INDEX idx_user_name (user_name);
 -- ALTER TABLE orders ADD INDEX idx_user_id (user_id);
 ALTER TABLE orders ADD INDEX idx_created_at (user_id, created_at);
 ALTER TABLE user_sessions ADD INDEX idx_expires_at (session_uuid, expires_at);
+
+-- ========================================
+-- セッションクリーンアップ最適化用インデックス
+-- ========================================
+-- DELETE FROM user_sessions WHERE expires_at < NOW() を高速化
+-- 複合インデックス idx_expires_at (session_uuid, expires_at) では
+-- expires_at が第2カラムのため、expires_at 単独の検索には非効率
+ALTER TABLE user_sessions ADD INDEX idx_user_sessions_expires_at (expires_at);
