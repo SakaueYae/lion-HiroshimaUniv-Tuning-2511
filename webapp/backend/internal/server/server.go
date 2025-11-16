@@ -6,6 +6,7 @@ import (
 	"backend/internal/middleware"
 	"backend/internal/repository"
 	"backend/internal/service"
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -67,6 +68,9 @@ func NewServer() (*Server, *sqlx.DB, error) {
 
 	s.setupRoutes(authHandler, productHandler, orderHandler, robotHandler, userAuthMW, robotAuthMW)
 
+	// セッションクリーンアップ処理を開始
+	s.StartSessionCleanup(dbConn)
+
 	return s, dbConn, nil
 }
 
@@ -120,4 +124,31 @@ func (s *Server) Run() {
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+// StartSessionCleanup は期限切れセッションを定期的に削除
+func (s *Server) StartSessionCleanup(db *sqlx.DB) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour) // 1時間ごとに実行
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				result, err := db.ExecContext(ctx,
+					"DELETE FROM user_sessions WHERE expires_at < NOW()")
+				cancel()
+
+				if err != nil {
+					log.Printf("Session cleanup failed: %v", err)
+				} else {
+					rowsAffected, _ := result.RowsAffected()
+					if rowsAffected > 0 {
+						log.Printf("Cleaned up %d expired sessions", rowsAffected)
+					}
+				}
+			}
+		}
+	}()
 }
