@@ -3,6 +3,7 @@ package repository
 import (
 	"backend/internal/model"
 	"context"
+	"strings"
 )
 
 type ProductRepository struct {
