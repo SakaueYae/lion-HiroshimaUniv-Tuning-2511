@@ -18,6 +18,7 @@ func NewProductService(store *repository.Store) *ProductService {
 
 func (s *ProductService) CreateOrders(ctx context.Context, userID int, items []model.RequestItem) ([]string, error) {
 	var insertedOrderIDs []string
+	var orders []model.Order
 
 	err := s.store.ExecTx(ctx, func(txStore *repository.Store) error {
 		itemsToProcess := make(map[int]int)
@@ -36,19 +37,23 @@ func (s *ProductService) CreateOrders(ctx context.Context, userID int, items []m
 					UserID:    userID,
 					ProductID: pID,
 				}
-				orderID, err := txStore.OrderRepo.Create(ctx, order)
-				if err != nil {
-					return err
-				}
-				insertedOrderIDs = append(insertedOrderIDs, orderID)
+				orders = append(orders, *order)
 			}
 		}
+
+		// バルクINSERT実行
+		orderIds, err := txStore.OrderRepo.CreateBatch(ctx, orders)
+		if err != nil {
+			return err
+		}
+		insertedOrderIDs = orderIds
 		return nil
 	})
 
 	if err != nil {
 		return nil, err
 	}
+
 	log.Printf("Created %d orders for user %d", len(insertedOrderIDs), userID)
 	return insertedOrderIDs, nil
 }

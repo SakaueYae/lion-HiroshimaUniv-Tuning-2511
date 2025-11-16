@@ -6,7 +6,9 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -181,4 +183,52 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 	pagedOrders := orders[start:end]
 
 	return pagedOrders, total, nil
+}
+
+// CreateBatch は複数の注文を一度にINSERTする（バルクインサート）
+func (r *OrderRepository) CreateBatch(ctx context.Context, orders []model.Order) ([]string, error) {
+	if len(orders) == 0 {
+		return []string{}, nil
+	}
+
+	// プレースホルダーとパラメータの準備
+	var values []string
+	var args []interface{}
+	now := time.Now()
+
+	for _, order := range orders {
+		values = append(values, "(?, ?, 'shipping', ?)")
+		args = append(args, order.UserID, order.ProductID, now)
+	}
+
+	// バルクINSERTクエリの構築
+	query := fmt.Sprintf(
+		"INSERT INTO orders (user_id, product_id, shipped_status, created_at) VALUES %s",
+		strings.Join(values, ", "),
+	)
+
+	// 実行
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	// 挿入されたIDを取得
+	lastInsertID, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+
+	// 挿入されたIDのリストを生成
+	insertedIDs := make([]string, rowsAffected)
+	for i := int64(0); i < rowsAffected; i++ {
+		insertedIDs[i] = strconv.FormatInt(lastInsertID+i, 10)
+	}
+
+	return insertedIDs, nil
 }
