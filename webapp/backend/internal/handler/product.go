@@ -99,30 +99,41 @@ func (h *ProductHandler) CreateOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProductHandler) GetImage(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("画像リクエスト受信: %s\n", r.URL.String())
 	imagePath := r.URL.Query().Get("path")
 	if imagePath == "" {
-		fmt.Println("画像パスが空です")
-		http.Error(w, "画像パスが指定されていません", http.StatusBadRequest)
+		http.Error(w, "Image path is required", http.StatusBadRequest)
 		return
 	}
 
+	// パスのサニタイズ
 	imagePath = filepath.Clean(imagePath)
 	if filepath.IsAbs(imagePath) || strings.Contains(imagePath, "..") {
-		fmt.Printf("無効なパス: %s\n", imagePath)
-		http.Error(w, "無効なパスです", http.StatusBadRequest)
+		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
 
 	baseImageDir := "/app/images"
 	fullPath := filepath.Join(baseImageDir, imagePath)
 
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		fmt.Printf("画像ファイルが見つかりません: %s\n", fullPath)
-		http.Error(w, "画像が見つかりません", http.StatusNotFound)
+	// ファイル情報の取得
+	fileInfo, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "Image not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Failed to stat image file: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
+	// セキュリティチェック: ベースディレクトリ外へのアクセス防止
+	if !strings.HasPrefix(fullPath, baseImageDir) {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	// Content-Typeの設定
 	ext := filepath.Ext(fullPath)
 	var contentType string
 	switch strings.ToLower(ext) {
@@ -137,14 +148,21 @@ func (h *ProductHandler) GetImage(w http.ResponseWriter, r *http.Request) {
 	default:
 		contentType = "application/octet-stream"
 	}
-	w.Header().Set("Content-Type", contentType)
 
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		fmt.Printf("画像ファイルの読み込みに失敗: %s\n", fullPath)
-		http.Error(w, "画像の読み込みに失敗しました", http.StatusInternalServerError)
-		return
+	// HTTPキャッシュヘッダーの設定
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=86400") // 24時間キャッシュ
+	w.Header().Set("ETag", fmt.Sprintf(`"%s-%d"`, imagePath, fileInfo.ModTime().Unix()))
+
+	// If-None-Match ヘッダーのチェック（ETagキャッシュ）
+	if match := r.Header.Get("If-None-Match"); match != "" {
+		expectedETag := fmt.Sprintf(`"%s-%d"`, imagePath, fileInfo.ModTime().Unix())
+		if strings.Contains(match, expectedETag) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
 	}
 
-	w.Write(data)
+	// 効率的なファイル配信
+	http.ServeFile(w, r, fullPath)
 }
