@@ -30,9 +30,13 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 	// 検索条件の追加
 	whereClause := ""
 	if req.Search != "" {
-		whereClause = " WHERE (name LIKE ? OR description LIKE ?)"
-		searchPattern := "%" + req.Search + "%"
-		args = append(args, searchPattern, searchPattern)
+		whereClause = " WHERE MATCH(name, description) AGAINST(? IN BOOLEAN MODE)"
+		searchPhrase := "\"" + req.Search + "\""
+		specialChars := []string{"+", "-", "@", ">", "<", "(", ")", "~", "*", "\""}
+		for _, c := range specialChars {
+			searchPhrase = strings.ReplaceAll(searchPhrase, c, "\\"+c)
+		}
+		args = append(args, searchPhrase)
 	}
 
 	// 総件数の取得
