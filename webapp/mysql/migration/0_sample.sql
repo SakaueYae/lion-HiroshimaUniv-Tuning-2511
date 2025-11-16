@@ -3,10 +3,11 @@ ALTER TABLE products ADD INDEX idx_name (name, product_id);
 ALTER TABLE products ADD INDEX idx_value (value, product_id);
 ALTER TABLE products ADD INDEX idx_weight (weight, product_id);
 
--- DESC（降順）用のインデックスを追加
-ALTER TABLE products ADD INDEX idx_name_desc (name DESC, product_id ASC);
-ALTER TABLE products ADD INDEX idx_value_desc (value DESC, product_id ASC);
-ALTER TABLE products ADD INDEX idx_weight_desc (weight DESC, product_id ASC);
+-- DESC（降順）用のインデックスは削除（マイグレーション時間短縮のため）
+-- MySQLはASCインデックスを逆順スキャンできるため、DESC専用インデックスは不要
+-- ALTER TABLE products ADD INDEX idx_name_desc (name DESC, product_id ASC);
+-- ALTER TABLE products ADD INDEX idx_value_desc (value DESC, product_id ASC);
+-- ALTER TABLE products ADD INDEX idx_weight_desc (weight DESC, product_id ASC);
 
 -- ========================================
 -- /api/robot/delivery-plan 最適化用インデックス
@@ -20,7 +21,9 @@ ALTER TABLE users ADD INDEX idx_user_name (user_name);
 -- すでにuser_idのインデックスがあるため、重複を避ける
 -- ALTER TABLE orders ADD INDEX idx_user_id (user_id);
 ALTER TABLE orders ADD INDEX idx_created_at (user_id, created_at);
-ALTER TABLE user_sessions ADD INDEX idx_expires_at (session_uuid, expires_at);
+-- 複合インデックスは削除（マイグレーション時間短縮のため）
+-- expires_at単独のインデックス（idx_user_sessions_expires_at）のみで十分
+-- ALTER TABLE user_sessions ADD INDEX idx_expires_at (session_uuid, expires_at);
 
 -- ========================================
 -- セッションクリーンアップ最適化用インデックス
