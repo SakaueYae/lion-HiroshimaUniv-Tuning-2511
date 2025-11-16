@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"log"
 	"time"
@@ -11,7 +13,6 @@ import (
 	"backend/internal/service/utils"
 
 	"go.opentelemetry.io/otel"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -46,11 +47,15 @@ func (s *AuthService) Login(ctx context.Context, userName, password string) (str
 
 		// パスワード検証処理をトレース
 		_, pwSpan := otel.Tracer("service.auth").Start(ctx, "password.verify")
-		err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+		// SHA256でパスワードをハッシュ化して比較
+		hasher := sha256.New()
+		hasher.Write([]byte(password))
+		hashedPassword := hex.EncodeToString(hasher.Sum(nil))
 		pwSpan.End()
-		if err != nil {
-			log.Printf("[Login] パスワード検証失敗: %v", err)
-			span.RecordError(err)
+
+		if user.PasswordHash != hashedPassword {
+			log.Printf("[Login] パスワード検証失敗")
+			span.RecordError(ErrInvalidPassword)
 			return ErrInvalidPassword
 		}
 
